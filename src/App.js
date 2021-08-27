@@ -1,8 +1,18 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 import 'antd/dist/antd.css'
 
-import { Card, Divider, Layout, Row, Col, Button, message } from 'antd'
+import { 
+  Card, 
+  Divider, 
+  Layout, 
+  Row, 
+  Col, 
+  Button,
+  Input, 
+  message,
+  Upload
+} from 'antd'
 import SideMenu from './components/SideMenu'
 import Text from 'antd/lib/typography/Text'
 
@@ -12,8 +22,12 @@ const { Header, Content, Footer } = Layout
 
 function App() {
   const [ images, setImages ] = useState([])
+  const [ rootDir, setRootDir ] = useState(null)
   const [ source, setSource ] = useState(null)
+  const [ dist, setDist ] = useState(null)
   const [ loading, setLoading ] = useState(false)
+
+  const dirSelector = useRef()
 
   const readImage = dir =>{
     ipcRenderer.send('explorer', { type : 'read-image', dir })
@@ -28,7 +42,19 @@ function App() {
 
     const payload = images.map(img => [ source, img ].join('/')) 
 
-    ipcRenderer.send('image-handler', { type : 'resize', images : payload })
+    ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist })
+  }
+
+  const handleOpen = (target) =>{
+    ipcRenderer.send('explorer', { type : 'open', target : source })
+  }
+
+  const handleTargetDirChange = (e) =>{
+    const sampleFile = e.target.files[0]
+    
+    const targetPath = sampleFile.path.replace(sampleFile.name, '')
+
+    setDist(targetPath)
   }
 
   useEffect(() =>{
@@ -44,17 +70,33 @@ function App() {
 
   return (
       <Layout style={{ width : 1260, height : 660 }}>
-        <SideMenu readImage={readImage} ipcRenderer={ipcRenderer} changeSrcDir={changeSrcDir}/>
+        <SideMenu 
+        readImage={readImage} 
+        ipcRenderer={ipcRenderer} 
+        changeSrcDir={changeSrcDir} 
+        rootDir={rootDir}
+        setRootDir={setRootDir}
+        />
         <Content style={{ margin: '24px 16px 0' }}>
 
           {
             source &&
             <>
               <Card>
-                <Row >
-                  <Text>현재 디렉토리는</Text>
-                  <Text type="success" style={{ padding : '0 5px', fontWeight : '700' }}>{ source }</Text>
-                  <Text>입니다.</Text>
+                <Row>
+                  <Col>
+                    <Text>현재 디렉토리는</Text>
+                    <Text type="success" style={{ padding : '0 5px', fontWeight : '700' }}>{ source }</Text>
+                    <Text>입니다.</Text>
+                  </Col>
+                  <Col style={{ marginLeft : 'auto'}}>
+                    <Button
+                    type="primary"
+                    onClick={handleOpen}
+                    >
+                      폴더열기
+                    </Button>
+                  </Col>
                 </Row>
               </Card>
               <span style={{ padding : 5 }} />
@@ -67,7 +109,7 @@ function App() {
               <Col>
                 <Text type="danger">*</Text>
                 <span style={{ padding : 5 }} />
-                <Text>리사이즈 이미지 : 1000x1000 으로 리사이징 합니다.</Text>
+                <Text>기본값 : 1000 x 1000</Text>
               </Col>
               <Col style={{ marginLeft : 'auto' }}>
                 <Button
@@ -81,6 +123,35 @@ function App() {
                     : '리사이징'
                   }
                 </Button>
+              </Col>
+            </Row>
+                
+            <span style={{ padding : 10 }} />
+
+            <Row gutter={[4, 4]}>
+              <Col>
+                <Row>
+                  <Col>
+                    <Input addonBefore="너비" value={1000}/>
+                  </Col>
+
+                  <span style={{ padding : 10 }} />
+
+                  <Col>
+                    <Input addonBefore="높이" value={1000}/>
+                  </Col>
+                </Row>
+              </Col>
+              <Col style={{ marginLeft : 'auto' }}>
+                  <input 
+                    type="file"
+                    style={{ display : 'none' }}
+                    webkitdirectory={rootDir}
+                    directory={rootDir}
+                    onChange={handleTargetDirChange}
+                    ref={dirSelector}
+                  />
+                  <Button onClick={() => dirSelector.current.click()}>저장 폴더 설정</Button>
               </Col>
             </Row>
           </Card>
@@ -108,13 +179,15 @@ function App() {
 
             <Divider />
 
-              {
-                images.map((img) =>{
-                  return (
-                    <Row><span style={{ padding : 5 }}/>{ img }</Row>
-                  )
-                })
-              }
+            {
+              images.length > 0 &&
+              images.map(img =>
+                <div>
+                  { img }
+                </div>
+              )
+            }
+
           </Card>
         </Content>
     </Layout>

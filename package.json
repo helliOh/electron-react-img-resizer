@@ -2,7 +2,7 @@
   "name": "resizer",
   "version": "0.1.0",
   "private": true,
-  "main": "src/electron/index.js",
+  "main": "electron/index.js",
   "homepage": "./",
   "dependencies": {
     "@ant-design/icons": "^4.6.3",
@@ -26,12 +26,16 @@
   },
   "scripts": {
     "start": "cross-env BROWSER=none react-scripts start",
-    "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "preelectron-start": "electron-rebuild",
-    "electron-start": "cross-env ELECTRON_START_URL=http://localhost:3000 electron .",
-    "electron-build": "yarn build && electron-builder build -c.extraMetadata.main=build/Main.js"
+    "app:react": "yarn start",
+    "preapp:electron": "electron-rebuild",
+    "app:electron": "cross-env ELECTRON_START_URL=http://localhost:3000 electron .",
+    "app:electron:standalone": "electron .",
+    "app:react:build" : "react-scripts build",
+    "app:electron:build" : "electron-builder build",
+    "predeploy" : "cp electron/index.js public/electron.js && cp electron/preload.js public/preload.js",
+    "deploy": " yarn app:react:build && yarn app:electron:build"
   },
   "eslintConfig": {
     "extends": [

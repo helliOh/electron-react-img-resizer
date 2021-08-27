@@ -9,7 +9,9 @@ const { Sider } = Layout
 const SideMenu = ({
     readImage,
     changeSrcDir,
-    ipcRenderer
+    ipcRenderer,
+    rootDir,
+    setRootDir,
 }) =>{
     const [ fileTree, setFileTree ] = useState([])
     const [ selected, setSelected ] = useState(null)
@@ -68,7 +70,10 @@ const SideMenu = ({
 
     useEffect(() =>{
         ipcRenderer.on('init-file-tree', (event, payload) =>{
-            setFileTree(payload)
+            if(!rootDir){
+                setRootDir(payload.root)
+            }
+            setFileTree(payload.tree)
         })
 
         ipcRenderer.send('explorer', { type : 'init' })
