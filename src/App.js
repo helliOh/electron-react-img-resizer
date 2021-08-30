@@ -40,16 +40,12 @@ function App() {
   const srcSelector = useRef()
   const distSelector = useRef()
 
-  const changeSrcDir = async (name) =>{
-    setSource(name)
-  }
-
   const handleResize = async () =>{
     setLoading(true)
 
-    const payload = images.map(img => img.replace(/\\/g, '/').split('/').reverse()[0] )
+    const payload = images.map(img => img.replace(/\\/g, '/') )
 
-    console.log(payload)
+    console.log(payload, source)
 
     ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist, config : { ...resizeConfig } })
   }
@@ -61,7 +57,7 @@ function App() {
       const targetPath = sampleFile.path.replace(sampleFile.name, '')
       
       ipcRenderer.send('explorer', { type : 'read-image', dir : targetPath })
-      setSource(targetPath)
+      setSource(targetPath.replace(/\\/g, '/'))
     }
   }
 
@@ -134,7 +130,6 @@ function App() {
       <Layout style={{ width : 1260, height : 660 }}>
         <SideMenu
         ipcRenderer={ipcRenderer} 
-        changeSrcDir={changeSrcDir} 
         rootDir={rootDir}
         setRootDir={setRootDir}
         />

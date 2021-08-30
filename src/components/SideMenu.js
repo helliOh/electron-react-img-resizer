@@ -17,8 +17,8 @@ const SideMenu = ({
         ipcRenderer.send('explorer', { type : 'init' })
     }
 
-    const handleNew = () =>{
-        ipcRenderer.send('explorer', { type : 'mkdir' })
+    const handleClear = () =>{
+        ipcRenderer.send('explorer', { type : 'clear' })
     }
 
     const handleMenuClick = (dir) =>{
@@ -51,7 +51,7 @@ const SideMenu = ({
                     fontWeight : '700',
                     cursor : 'default',
                     fontSize : '18px',
-                }}>리사이저(Beta) ver 0.2.0 </Text>
+                }}>ver 1.0.0 </Text>
             </Menu.Item>
             <Menu.Item onClick={handleRefresh}> ↻ 새로고침 </Menu.Item>
             {
@@ -78,7 +78,7 @@ const SideMenu = ({
                     ))
                 )
             }
-            <Menu.Item onClick={handleNew}>+ 새 폴더</Menu.Item>
+            <Menu.Item onClick={handleClear}>- 데이터 비우기</Menu.Item>
         </Menu>
       </Sider>
     )
