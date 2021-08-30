@@ -26,6 +26,10 @@ function App() {
   const [ source, setSource ] = useState(null)
   const [ dist, setDist ] = useState(null)
   const [ loading, setLoading ] = useState(false)
+  const [ resizeConfig, setResizeConfig ] = useState({
+    width : 1000,
+    height: 1000
+  })
 
   const dirSelector = useRef()
 
@@ -37,12 +41,13 @@ function App() {
     setSource(name)
   }
 
+
   const handleResize = async () =>{
     setLoading(true)
 
-    const payload = images.map(img => [ source, img ].join('/')) 
+    const payload = images.map(img => img.replace(/\\/, '/').split('/')[1] )
 
-    ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist })
+    ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist, config : { ...resizeConfig } })
   }
 
   const handleOpen = (target) =>{
@@ -52,9 +57,31 @@ function App() {
   const handleTargetDirChange = (e) =>{
     const sampleFile = e.target.files[0]
     
-    const targetPath = sampleFile.path.replace(sampleFile.name, '')
+    if(sampleFile){
+      const targetPath = sampleFile.path.replace(sampleFile.name, '')
 
-    setDist(targetPath)
+      setDist(targetPath)
+    }
+  }
+
+  const handleWidthChange = (e) =>{
+    const { value } = e.target
+
+    if( isNaN(value) ){
+      return
+    }
+
+    setResizeConfig({ ...resizeConfig, width : Number(value) })
+  }
+
+  const handleHeightChange = (e) =>{
+    const { value } = e.target
+
+    if( isNaN(value) ){
+      return
+    }
+
+    setResizeConfig({ ...resizeConfig, height : Number(value) })    
   }
 
   useEffect(() =>{
@@ -63,7 +90,7 @@ function App() {
     })
 
     ipcRenderer.on('resize-complete', (event, payload) =>{
-      message.success(`${images.length}개의 상품이 리사이징이 완료되었어요`)
+      message.success(`${payload.count}개의 상품이 리사이징이 완료되었어요`)
       setLoading(false)
     })
   }, [])
@@ -132,13 +159,13 @@ function App() {
               <Col>
                 <Row>
                   <Col>
-                    <Input addonBefore="너비" value={1000}/>
+                    <Input addonBefore="너비" value={resizeConfig.width} onChange={handleWidthChange}/>
                   </Col>
 
                   <span style={{ padding : 10 }} />
 
                   <Col>
-                    <Input addonBefore="높이" value={1000}/>
+                    <Input addonBefore="높이" value={resizeConfig.height} onChange={handleHeightChange}/>
                   </Col>
                 </Row>
               </Col>
@@ -153,6 +180,14 @@ function App() {
                   />
                   <Button onClick={() => dirSelector.current.click()}>저장 폴더 설정</Button>
               </Col>
+            </Row>
+
+            <span style={{ padding : 10 }} />
+
+            <Row>
+                <Text type="danger">*</Text>
+                <span style={{ padding : 5 }} />
+                <Text>저장 폴더에는 최소 하나의 파일을 저장폴더에 포함해 주세요. 지정하지 않거나 파일이 포함되지 않으면 임시폴더를 생성합니다.</Text>
             </Row>
           </Card>
 
