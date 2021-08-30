@@ -10,6 +10,39 @@ const sizeOf = require('buffer-image-size')
 const userDataDir = app.getPath('appData')
 const rootDir = path.resolve(userDataDir, 'electron-resizer')
 
+const isSystemDir = dir => (
+    [ 
+        '.git', 
+        'node_modules', 
+        'src', 
+        'public', 
+        'dist', 
+        'build', 
+        'electron',
+        'temp_rsz'
+    ]
+    .some(name => name === dir)
+)
+
+const isImage = name => (
+    [
+        '.png', 
+        '.jpg', 
+        '.gif' 
+    ]
+    .some(ext => name.includes(ext))
+)
+
+const searchDirectory = () => fs.readdirSync(rootDir, { withFileTypes : true })
+.filter(file => file.isDirectory())
+.filter(file => !isSystemDir(file.name))
+.map(file => file.name)
+
+const searchImage = (dir) => fs.readdirSync(dir, { withFileTypes : true })
+.filter(file => !file.isDirectory())
+.filter(file => isImage(file.name.toLocaleLowerCase()))
+.map(file => path.join(dir, file.name) )
+
 if( !fs.existsSync(rootDir) ) fs.mkdirSync(rootDir)
 
 console.log(`root directory: ${rootDir}`)
@@ -60,39 +93,6 @@ app.on('window-all-closed', () =>{
 ipcMain.on('explorer', (event, payload) => {
     const { type } = payload
 
-    const isSystemDir = dir => (
-        [ 
-            '.git', 
-            'node_modules', 
-            'src', 
-            'public', 
-            'dist', 
-            'build', 
-            'electron',
-            'temp_rsz'
-        ]
-        .some(name => name === dir)
-    )
-
-    const isImage = name => (
-        [
-            '.png', 
-            '.jpg', 
-            '.gif' 
-        ]
-        .some(ext => name.includes(ext))
-    )
-    
-    const searchDirectory = () => fs.readdirSync(rootDir, { withFileTypes : true })
-    .filter(file => file.isDirectory())
-    .filter(file => !isSystemDir(file.name))
-    .map(file => file.name)
-
-    const searchImage = (dir) => fs.readdirSync(dir, { withFileTypes : true })
-    .filter(file => !file.isDirectory())
-    .filter(file => isImage(file.name.toLocaleLowerCase()))
-    .map(file => path.join(dir, file.name) )
-
     try{
         switch(type){
             case 'init': {
@@ -116,7 +116,7 @@ ipcMain.on('explorer', (event, payload) => {
                 )
             }
             case 'open' : {
-                shell.openExternal(rootDir)
+                shell.openExternal( path.resolve(rootDir, payload.dir) )
  
                 return
             }
@@ -155,24 +155,21 @@ ipcMain.on('image-handler', async (event, payload) => {
 
     switch(type){
         case 'resize': {
-            console.log(payload)
-
             const { config } = payload
             const { width, height } = config
 
-            const baseW = Math.floor(width * 0.6)
-            const baseH = Math.floor(height * 0.6)
+            const pad = Number(config.pad / 100)
 
-            const padW = Math.floor(width * 0.2)
-            const padH = Math.floor(height * 0.2)
+            const base = 1 - 2 * pad
+
+            const baseW = Math.floor(width * base)
+            const baseH = Math.floor(height * base)
+
+            const padW = Math.floor(width * pad)
+            const padH = Math.floor(height * pad)
 
             const files = payload.images
             .map(filename =>{
-                console.log({
-                    rootDir,
-                    src : payload.source,
-                    filename
-                })
                 const body  = fs.readFileSync( path.resolve(rootDir, payload.source, filename) )
                 const header = sizeOf(body)
 
@@ -194,32 +191,38 @@ ipcMain.on('image-handler', async (event, payload) => {
             const resized = await Promise.all(
                 files.map(file => new Promise(async (resolve, reject) =>{
                     try{
+                        const analysis = await sharp(file.body).stats()
+
+                        const { dominant } = analysis
+                        const { r, g, b } = dominant
+
+                        const background = {
+                            r,
+                            g,
+                            b,
+                            alpha : 1
+                        }
+
+                        console.log(background)
+
                         const resized = await sharp(file.body)
                         .resize(
                             baseW,
                             baseH,
                             {
-                                fit: 'contain',
-                                background: {
-                                    r: 255, 
-                                    g: 255, 
-                                    b: 255, 
-                                    alpha: 1
-                                }
+                                fit: config.preserveAspectRatio ? 'contain' : 'fill',
+                                background
                             }
                         )
-                        .extend({
-                            top: padH, 
-                            bottom: padH, 
-                            left: padW, 
-                            right: padW, 
-                            background: { 
-                                r: 255, 
-                                g: 255, 
-                                b: 255, 
-                                alpha: 1
-                            } 
-                        })
+                        .extend(
+                            {
+                                top : padH,
+                                right : padW,
+                                bottom : padH,
+                                left : padW,
+                                background
+                            }
+                        )
                         .toBuffer()
 
                         resolve({
@@ -228,7 +231,7 @@ ipcMain.on('image-handler', async (event, payload) => {
                                 width : width, 
                                 height : height, 
                                 type : file.header.type, 
-                                filename : path.reosolve(dist, file.header.filename.split('/').reverse()[0] ),
+                                filename : path.resolve(dist, file.header.filename.split('/').reverse()[0] ),
                             },
                             body : resized
                         })

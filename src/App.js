@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 
+import path from 'path'
+
 import 'antd/dist/antd.css'
 
 import { 
@@ -11,12 +13,14 @@ import {
   Button,
   Input, 
   message,
-  Upload
+  Upload,
+  Switch
 } from 'antd'
 import SideMenu from './components/SideMenu'
 import Text from 'antd/lib/typography/Text'
+import Checkbox from 'antd/lib/checkbox/Checkbox'
 
-const { ipcRenderer } = window.require("electron")
+const { ipcRenderer } = window.require('electron')
 
 const { Header, Content, Footer } = Layout
 
@@ -28,7 +32,9 @@ function App() {
   const [ loading, setLoading ] = useState(false)
   const [ resizeConfig, setResizeConfig ] = useState({
     width : 1000,
-    height: 1000
+    height: 1000,
+    pad : 20,
+    preserveAspectRatio : true
   })
 
   const srcSelector = useRef()
@@ -38,11 +44,12 @@ function App() {
     setSource(name)
   }
 
-
   const handleResize = async () =>{
     setLoading(true)
 
-    const payload = images.map(img => img.replace(/\\/, '/').split('/')[1] )
+    const payload = images.map(img => img.replace(/\\/g, '/').split('/').reverse()[0] )
+
+    console.log(payload)
 
     ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist, config : { ...resizeConfig } })
   }
@@ -58,15 +65,15 @@ function App() {
     }
   }
 
-  const handleTargetDirChange = (e) =>{
-    const sampleFile = e.target.files[0]
+  // const handleTargetDirChange = (e) =>{
+  //   const sampleFile = e.target.files[0]
     
-    if(sampleFile){
-      const targetPath = sampleFile.path.replace(sampleFile.name, '')
+  //   if(sampleFile){
+  //     const targetPath = sampleFile.path.replace(sampleFile.name, '')
 
-      setDist(targetPath)
-    }
-  }
+  //     setDist(targetPath)
+  //   }
+  // }
 
   const handleWidthChange = (e) =>{
     const { value } = e.target
@@ -86,6 +93,30 @@ function App() {
     }
 
     setResizeConfig({ ...resizeConfig, height : Number(value) })    
+  }
+
+  const handlePadChanage = (e) =>{
+    const { value } = e.target
+
+    if( isNaN(value) ){
+      return
+    }
+
+    const valueNum = Number(value)
+
+    if(valueNum < 0){
+      return setResizeConfig({ ...resizeConfig, pad : 0 }) 
+    }
+    else if(valueNum > 100){
+      return setResizeConfig({ ...resizeConfig, pad : 100 }) 
+    }
+    else{
+      setResizeConfig({ ...resizeConfig, pad : valueNum })
+    }
+  }
+
+  const togglePreserveAspectRatio = (e) =>{
+    setResizeConfig({ ...resizeConfig, preserveAspectRatio : !resizeConfig.preserveAspectRatio })
   }
 
   useEffect(() =>{
@@ -151,7 +182,7 @@ function App() {
               <Col>
                 <Text type="danger">*</Text>
                 <span style={{ padding : 5 }} />
-                <Text>기본값 : 1000 x 1000</Text>
+                <Text>기본값 : 1000 x 1000 (여백: 20%)</Text>
               </Col>
               <Col style={{ marginLeft : 'auto' }}>
                 <Button
@@ -170,8 +201,7 @@ function App() {
                 
             <span style={{ padding : 10 }} />
 
-            <Row gutter={[4, 4]}>
-              <Col>
+            <Row>
                 <Row>
                   <Col>
                     <Input addonBefore="너비" value={resizeConfig.width} onChange={handleWidthChange}/>
@@ -182,9 +212,16 @@ function App() {
                   <Col>
                     <Input addonBefore="높이" value={resizeConfig.height} onChange={handleHeightChange}/>
                   </Col>
+
+                  <span style={{ padding : 10 }} />
+
+                  <Col>
+                    <Input addonBefore="여백(%)" value={resizeConfig.pad} onChange={handlePadChanage}/>
+                  </Col>
                 </Row>
-              </Col>
-              <Col style={{ marginLeft : 'auto' }}>
+
+                <span style={{ padding : 10 }} />
+              {/* <Col style={{ marginLeft : 'auto' }}>
                   <input 
                     type="file"
                     style={{ display : 'none' }}
@@ -194,16 +231,28 @@ function App() {
                     ref={distSelector}
                   />
                   <Button onClick={() => distSelector.current.click()}>저장 폴더 설정</Button>
-              </Col>
+              </Col> */}
+
+                
             </Row>
 
             <span style={{ padding : 10 }} />
 
             <Row>
+              <Col style={{ display : 'flex', flexDirection : 'column' }}>
+                <Text style={{ fontSize : '11px', color : '#999' }}>원본비율유지</Text>
+                <Checkbox 
+                  checked={resizeConfig.preserveAspectRatio} 
+                  onClick={togglePreserveAspectRatio}
+                />
+              </Col>
+            </Row>
+
+            {/* <Row>
                 <Text type="danger">*</Text>
                 <span style={{ padding : 5 }} />
                 <Text>모든 폴더에는 최소 하나의 파일을 저장폴더에 포함해 주세요. 지정하지 않거나 파일이 포함되지 않으면 임시폴더를 생성합니다.</Text>
-            </Row>
+            </Row> */}
           </Card>
 
           <span style={{ padding : 5 }} />
