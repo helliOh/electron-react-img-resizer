@@ -4,6 +4,7 @@ const fs = require('fs')
 const url = require('url')
 const path = require('path')
 const sharp = require('sharp')
+const moment = require('moment')
 const sizeOf = require('buffer-image-size')                
 
 const userDataDir = app.getPath('appData')
@@ -12,7 +13,6 @@ const rootDir = path.resolve(userDataDir, 'electron-resizer')
 if( !fs.existsSync(rootDir) ) fs.mkdirSync(rootDir)
 
 console.log(`root directory: ${rootDir}`)
-
 
 function createWindow(){
     const window = new BrowserWindow({
@@ -88,7 +88,7 @@ ipcMain.on('explorer', (event, payload) => {
     .filter(file => !isSystemDir(file.name))
     .map(file => file.name)
 
-    const searchImage = (dir) => fs.readdirSync( path.resolve(rootDir, dir), { withFileTypes : true })
+    const searchImage = (dir) => fs.readdirSync(dir, { withFileTypes : true })
     .filter(file => !file.isDirectory())
     .filter(file => isImage(file.name.toLocaleLowerCase()))
     .map(file => path.join(dir, file.name) )
@@ -168,7 +168,12 @@ ipcMain.on('image-handler', async (event, payload) => {
 
             const files = payload.images
             .map(filename =>{
-                const body  = fs.readFileSync(path.resolve(rootDir, payload.source, filename))
+                console.log({
+                    rootDir,
+                    src : payload.source,
+                    filename
+                })
+                const body  = fs.readFileSync( path.resolve(rootDir, payload.source, filename) )
                 const header = sizeOf(body)
 
                 return ({
@@ -177,22 +182,14 @@ ipcMain.on('image-handler', async (event, payload) => {
                 })
             })
 
-            const found = fs.existsSync(payload.dist)
-            const tmpPath = path.resolve( path.resolve(rootDir, 'temp_rsz') ) 
+            const sessionName = `${moment().format('YYYYMMDDHHmmSS')}_${width}x${height}`
+            const dist = path.resolve(rootDir, sessionName)
 
-            console.log({ found, tmpPath })
-
-            if(
-                !payload.dist ||
-                (
-                    payload.dist && !found
-                )
-            ){
-                fs.existsSync(tmpPath) && fs.rmdirSync(tmpPath, { recursive: true })
-                !fs.existsSync(tmpPath) && fs.mkdirSync(tmpPath)
+            if( fs.existsSync(dist) ){
+                fs.rmdirSync(dist, { recursive: true })
             }
 
-            const dist = ( payload.dist && found ) ? payload.dist : tmpPath
+            fs.mkdirSync(dist)
 
             const resized = await Promise.all(
                 files.map(file => new Promise(async (resolve, reject) =>{
@@ -231,10 +228,7 @@ ipcMain.on('image-handler', async (event, payload) => {
                                 width : width, 
                                 height : height, 
                                 type : file.header.type, 
-                                filename : [ 
-                                    dist ,
-                                    file.header.filename.split('/').reverse()[0] 
-                                ].join('/') 
+                                filename : path.reosolve(dist, file.header.filename.split('/').reverse()[0] ),
                             },
                             body : resized
                         })
@@ -247,7 +241,11 @@ ipcMain.on('image-handler', async (event, payload) => {
 
             const writings = resized.map(file => fs.writeFileSync( file.header.filename, file.body ))
 
-            return event.sender.send('resize-complete', { count : writings.length })
+            event.sender.send('resize-complete', { count : writings.length })
+            return event.sender.send('init-file-tree', {
+                root : rootDir,
+                tree : searchDirectory(),
+            })
         }
         default:{
             return

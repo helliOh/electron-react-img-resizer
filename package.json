@@ -17,6 +17,7 @@
     "buffer": "^6.0.3",
     "buffer-image-size": "^0.6.4",
     "cross-env": "^7.0.3",
+    "moment": "^2.29.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-scripts": "4.0.3",
@@ -32,9 +33,9 @@
     "preapp:electron": "electron-rebuild",
     "app:electron": "cross-env ELECTRON_START_URL=http://localhost:3000 electron .",
     "app:electron:standalone": "electron .",
-    "app:react:build" : "react-scripts build",
-    "app:electron:build" : "electron-builder build",
-    "predeploy" : "cp electron/index.js public/electron.js && cp electron/preload.js public/preload.js",
+    "app:react:build": "react-scripts build",
+    "app:electron:build": "electron-builder build",
+    "predeploy": "cp electron/index.js public/electron.js && cp electron/preload.js public/preload.js",
     "deploy": " yarn app:react:build && yarn app:electron:build"
   },
   "eslintConfig": {

@@ -97,7 +97,7 @@ const SideMenu = ({
                     cursor : 'default',
                     fontSize : '18px',
                     
-                }}>디렉토리 탐색기</Text>
+                }}>리사이저 0.1 Beta</Text>
             </Menu.Item>
             <Menu.Item onClick={handleRefresh}> ↻ 새로고침 </Menu.Item>
             {

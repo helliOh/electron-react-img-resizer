@@ -31,11 +31,8 @@ function App() {
     height: 1000
   })
 
-  const dirSelector = useRef()
-
-  const readImage = dir =>{
-    ipcRenderer.send('explorer', { type : 'read-image', dir })
-  }
+  const srcSelector = useRef()
+  const distSelector = useRef()
 
   const changeSrcDir = async (name) =>{
     setSource(name)
@@ -50,8 +47,15 @@ function App() {
     ipcRenderer.send('image-handler', { type : 'resize', images : payload, source, dist, config : { ...resizeConfig } })
   }
 
-  const handleOpen = (target) =>{
-    ipcRenderer.send('explorer', { type : 'open', target : source })
+  const handleSourceDirChange = (e) =>{
+    const sampleFile = e.target.files[0]
+    
+    if(sampleFile){
+      const targetPath = sampleFile.path.replace(sampleFile.name, '')
+      
+      ipcRenderer.send('explorer', { type : 'read-image', dir : targetPath })
+      setSource(targetPath)
+    }
   }
 
   const handleTargetDirChange = (e) =>{
@@ -90,15 +94,14 @@ function App() {
     })
 
     ipcRenderer.on('resize-complete', (event, payload) =>{
-      message.success(`${payload.count}개의 상품이 리사이징이 완료되었어요`)
+      message.success(`${ payload.count }개의 상품이 리사이징이 완료되었어요`)
       setLoading(false)
     })
   }, [])
 
   return (
       <Layout style={{ width : 1260, height : 660 }}>
-        <SideMenu 
-        readImage={readImage} 
+        <SideMenu
         ipcRenderer={ipcRenderer} 
         changeSrcDir={changeSrcDir} 
         rootDir={rootDir}
@@ -107,21 +110,33 @@ function App() {
         <Content style={{ margin: '24px 16px 0' }}>
 
           {
-            source &&
             <>
               <Card>
                 <Row>
-                  <Col>
-                    <Text>현재 디렉토리는</Text>
-                    <Text type="success" style={{ padding : '0 5px', fontWeight : '700' }}>{ source }</Text>
-                    <Text>입니다.</Text>
-                  </Col>
+                  {
+                    source && (
+                      <Col>
+                        <Text>현재 디렉토리는</Text>
+                        <Text type="success" style={{ padding : '0 5px', fontWeight : '700' }}>{ source }</Text>
+                        <Text>입니다.</Text>
+                      </Col>
+                    )
+                  }
+                  
                   <Col style={{ marginLeft : 'auto'}}>
+                    <input 
+                      type="file"
+                      style={{ display : 'none' }}
+                      webkitdirectory={rootDir}
+                      directory={rootDir}
+                      onChange={handleSourceDirChange}
+                      ref={srcSelector}
+                    />
                     <Button
                     type="primary"
-                    onClick={handleOpen}
+                    onClick={() => srcSelector.current.click()}
                     >
-                      폴더열기
+                      폴더선택
                     </Button>
                   </Col>
                 </Row>
@@ -176,9 +191,9 @@ function App() {
                     webkitdirectory={rootDir}
                     directory={rootDir}
                     onChange={handleTargetDirChange}
-                    ref={dirSelector}
+                    ref={distSelector}
                   />
-                  <Button onClick={() => dirSelector.current.click()}>저장 폴더 설정</Button>
+                  <Button onClick={() => distSelector.current.click()}>저장 폴더 설정</Button>
               </Col>
             </Row>
 
@@ -187,7 +202,7 @@ function App() {
             <Row>
                 <Text type="danger">*</Text>
                 <span style={{ padding : 5 }} />
-                <Text>저장 폴더에는 최소 하나의 파일을 저장폴더에 포함해 주세요. 지정하지 않거나 파일이 포함되지 않으면 임시폴더를 생성합니다.</Text>
+                <Text>모든 폴더에는 최소 하나의 파일을 저장폴더에 포함해 주세요. 지정하지 않거나 파일이 포함되지 않으면 임시폴더를 생성합니다.</Text>
             </Row>
           </Card>
 
