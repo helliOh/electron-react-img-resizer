@@ -33,7 +33,7 @@ function App() {
   const [ resizeConfig, setResizeConfig ] = useState({
     width : 1000,
     height: 1000,
-    pad : 20,
+    pad : 10,
     preserveAspectRatio : true
   })
 
@@ -177,7 +177,7 @@ function App() {
               <Col>
                 <Text type="danger">*</Text>
                 <span style={{ padding : 5 }} />
-                <Text>기본값 : 1000 x 1000 (여백: 20%)</Text>
+                <Text>기본값 : 1000 x 1000 (여백: 10%)</Text>
               </Col>
               <Col style={{ marginLeft : 'auto' }}>
                 <Button

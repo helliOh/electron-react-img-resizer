@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Empty, Layout, Menu, Input } from 'antd'
 import { Typography } from 'antd'
+import { name, version } from '../../package.json'
 
 const { Text } = Typography
 
@@ -12,7 +13,6 @@ const SideMenu = ({
     setRootDir,
 }) =>{
     const [ fileTree, setFileTree ] = useState([])
-    
     const handleRefresh = () =>{
         ipcRenderer.send('explorer', { type : 'init' })
     }
@@ -51,7 +51,7 @@ const SideMenu = ({
                     fontWeight : '700',
                     cursor : 'default',
                     fontSize : '18px',
-                }}>ver 1.0.0 </Text>
+                }}>{ name }({ version })</Text>
             </Menu.Item>
             <Menu.Item onClick={handleRefresh}> ↻ 새로고침 </Menu.Item>
             {

@@ -259,12 +259,25 @@ ipcMain.on('image-handler', async (event, payload) => {
                         .raw()
                         .toBuffer()
 
-                        const [ r, g, b ] = Array.from(samplePx)
+                        const [ r, g, b, alpha ] = Array.from(samplePx)
 
-                        const background = { r, g, b, alpha : 1 }
+                        console.log(Array.from(samplePx))
+
+                        console.log(`${ file.header.originName } (${[ r, g, b , alpha].join(', ')})`)
+
+                        const background = { 
+                            r, 
+                            g, 
+                            b, 
+                            alpha : typeof(alpha) !== 'undefined' 
+                            ? alpha 
+                            : 1 
+                        }
 
                         const resized = await sharp(file.body)
-                        .resize(
+                        .ensureAlpha()
+                        .trim()
+                        .resize(//focus on image
                             baseW,
                             baseH,
                             {
@@ -272,7 +285,7 @@ ipcMain.on('image-handler', async (event, payload) => {
                                 background
                             }
                         )
-                        .extend(
+                        .extend(//then expand background
                             {
                                 top : padH,
                                 right : padW,
