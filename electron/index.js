@@ -3,9 +3,11 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const fs = require('fs')
 const url = require('url')
 const path = require('path')
-const sharp = require('sharp')
 const moment = require('moment')
-const sizeOf = require('buffer-image-size')                
+const sizeOf = require('buffer-image-size')
+
+const sharp = require('sharp')
+const smartcrop = require('smartcrop')
 
 const userDataDir = app.getPath('appData')
 const rootDir = path.resolve(userDataDir, 'electron-resizer')
@@ -208,6 +210,7 @@ ipcMain.on('image-handler', async (event, payload) => {
 
     switch(type){
         case 'resize': {
+            event.sender.send('resize-start')
             const { config } = payload
             const { width, height } = config
 
@@ -220,6 +223,8 @@ ipcMain.on('image-handler', async (event, payload) => {
 
             const padW = Math.floor(width * pad)
             const padH = Math.floor(height * pad)
+
+            event.sender.send('resize-read')
 
             const files = payload.images
             .map(filename =>{
@@ -234,7 +239,9 @@ ipcMain.on('image-handler', async (event, payload) => {
                 })
             })
 
-            const sessionName = `${moment().format('YYYYMMDDHHmmSS')}_${width}x${height}`
+            event.sender.send('resize-session')
+
+            const sessionName = `${ moment().format('YYYYMMDDHHmmSS') }_${ width }x${ height }`
             const dist = path.resolve(rootDir, sessionName)
 
             if( fs.existsSync(dist) ){
@@ -243,20 +250,19 @@ ipcMain.on('image-handler', async (event, payload) => {
 
             fs.mkdirSync(dist)
 
+            event.sender.send('resize-process')
+
             const resized = await Promise.all(
                 files.map(file => new Promise(async (resolve, reject) =>{
                     try{
-                        const analysis = await sharp(file.body).stats()
+                        const samplePx = await sharp(file.body)
+                        .extract({ left : 0, top : 0, width : 1, height : 1 })
+                        .raw()
+                        .toBuffer()
 
-                        const { dominant } = analysis
-                        const { r, g, b } = dominant
+                        const [ r, g, b ] = Array.from(samplePx)
 
-                        const background = {
-                            r,
-                            g,
-                            b,
-                            alpha : 1
-                        }
+                        const background = { r, g, b, alpha : 1 }
 
                         const resized = await sharp(file.body)
                         .resize(
@@ -316,3 +322,4 @@ ipcMain.on('image-handler', async (event, payload) => {
         }
     }
 })
+
