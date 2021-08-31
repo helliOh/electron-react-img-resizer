@@ -7,7 +7,6 @@ const moment = require('moment')
 const sizeOf = require('buffer-image-size')
 
 const sharp = require('sharp')
-const smartcrop = require('smartcrop')
 
 const userDataDir = app.getPath('appData')
 const rootDir = path.resolve(userDataDir, 'electron-resizer')

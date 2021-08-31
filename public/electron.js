@@ -3,16 +3,101 @@ const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const fs = require('fs')
 const url = require('url')
 const path = require('path')
+const moment = require('moment')
+const sizeOf = require('buffer-image-size')
+
 const sharp = require('sharp')
-const sizeOf = require('buffer-image-size')                
+const smartcrop = require('smartcrop')
 
 const userDataDir = app.getPath('appData')
 const rootDir = path.resolve(userDataDir, 'electron-resizer')
 
+const isSystemDir = dir => (
+    [ 
+        '.git', 
+        'node_modules', 
+        'src', 
+        'public', 
+        'dist', 
+        'build', 
+        'electron',
+        'temp_rsz'
+    ]
+    .some(name => name === dir)
+)
+
+const isImage = file => (
+    [
+        '.png', 
+        '.jpg', 
+        '.gif' 
+    ]
+    .some(ext => file.name.includes(ext))
+)
+
+const searchDirectory = () => fs.readdirSync(rootDir, { withFileTypes : true })
+.filter(file => file.isDirectory())
+.filter(file => !isSystemDir(file.name))
+.map(file => file.name)
+
+const searchImage = (dir) => fs.readdirSync(dir, { withFileTypes : true })
+.filter(file => !file.isDirectory())
+.filter(file => isImage(file.name.toLocaleLowerCase()))
+.map(file => path.join(dir, file.name) )
+
+const readdirSyncRecursive = (current, options={ filterBy : () => true }) =>{
+    const { filterBy } = options
+
+    const files = fs.readdirSync(current, { withFileTypes : true })
+
+    const dirs = files
+    .filter(file => file.isDirectory())
+    .map(file => file.name)
+
+    const normalFiles = files
+    .filter(file => !file.isDirectory())
+    .filter(file => filterBy(file) )
+    .map(file => file.name)
+
+    return {
+        root : current === '.',
+        path : current,
+        isDir : true,
+        children : [ 
+            ...dirs.map(dir => readdirSyncRecursive( path.resolve(current, dir), options ) ), 
+            ...normalFiles.map(normalFile => ({
+                root : false,
+                path : path.resolve(current, normalFile),
+                isDir : false,
+                children : undefined
+            })) 
+        ]
+    }
+}
+
+const findImageAll = (current) =>{
+    const fileTree = readdirSyncRecursive(current, { filterBy : isImage }).children
+
+    let buffer = [ ...fileTree ]
+
+    while( buffer.some(e => e.isDir) ){
+        const head = buffer.shift()
+
+        if( head.isDir ){
+            buffer = [ ...buffer, ...head.children ] 
+        }
+        else{
+            buffer.push({ ...head })
+        }
+
+    }
+
+    return buffer.map(elem => elem.path)
+}
+
 if( !fs.existsSync(rootDir) ) fs.mkdirSync(rootDir)
 
 console.log(`root directory: ${rootDir}`)
-
 
 function createWindow(){
     const window = new BrowserWindow({
@@ -60,39 +145,6 @@ app.on('window-all-closed', () =>{
 ipcMain.on('explorer', (event, payload) => {
     const { type } = payload
 
-    const isSystemDir = dir => (
-        [ 
-            '.git', 
-            'node_modules', 
-            'src', 
-            'public', 
-            'dist', 
-            'build', 
-            'electron',
-            'temp_rsz'
-        ]
-        .some(name => name === dir)
-    )
-
-    const isImage = name => (
-        [
-            '.png', 
-            '.jpg', 
-            '.gif' 
-        ]
-        .some(ext => name.includes(ext))
-    )
-    
-    const searchDirectory = () => fs.readdirSync(rootDir, { withFileTypes : true })
-    .filter(file => file.isDirectory())
-    .filter(file => !isSystemDir(file.name))
-    .map(file => file.name)
-
-    const searchImage = (dir) => fs.readdirSync( path.resolve(rootDir, dir), { withFileTypes : true })
-    .filter(file => !file.isDirectory())
-    .filter(file => isImage(file.name.toLocaleLowerCase()))
-    .map(file => path.join(dir, file.name) )
-
     try{
         switch(type){
             case 'init': {
@@ -104,8 +156,9 @@ ipcMain.on('explorer', (event, payload) => {
                     }
                 )
             }
-            case 'mkdir': {
-                fs.mkdirSync( path.join(rootDir, '새 폴더') )
+            case 'clear': {
+                fs.rmdirSync( rootDir, { recursive : true })
+                fs.mkdirSync( rootDir )
     
                 return event.sender.send(
                     'init-file-tree', 
@@ -116,7 +169,7 @@ ipcMain.on('explorer', (event, payload) => {
                 )
             }
             case 'open' : {
-                shell.openExternal(rootDir)
+                shell.openExternal( path.resolve(rootDir, payload.dir) )
  
                 return
             }
@@ -135,9 +188,11 @@ ipcMain.on('explorer', (event, payload) => {
                 )
             }
             case 'read-image': {
+                const fileTree = findImageAll(payload.dir)
+
                 return event.sender.send(
                     'set-image', 
-                    searchImage( payload.dir )
+                    fileTree
                 )
             }
             default:{
@@ -155,74 +210,78 @@ ipcMain.on('image-handler', async (event, payload) => {
 
     switch(type){
         case 'resize': {
-            console.log(payload)
-
+            event.sender.send('resize-start')
             const { config } = payload
             const { width, height } = config
 
-            const baseW = Math.floor(width * 0.6)
-            const baseH = Math.floor(height * 0.6)
+            const pad = Number(config.pad / 100)
 
-            const padW = Math.floor(width * 0.2)
-            const padH = Math.floor(height * 0.2)
+            const base = 1 - 2 * pad
+
+            const baseW = Math.floor(width * base)
+            const baseH = Math.floor(height * base)
+
+            const padW = Math.floor(width * pad)
+            const padH = Math.floor(height * pad)
+
+            event.sender.send('resize-read')
 
             const files = payload.images
             .map(filename =>{
-                const body  = fs.readFileSync(path.resolve(rootDir, payload.source, filename))
+                const body  = fs.readFileSync( filename )
                 const header = sizeOf(body)
 
+                const [ originName, ...rest ] = filename.replace(payload.source, '').split('/').reverse()
+
                 return ({
-                    header : { ...header, filename },
+                    header : { ...header, filename, originName, subPath : rest },
                     body
                 })
             })
 
-            const found = fs.existsSync(payload.dist)
-            const tmpPath = path.resolve( path.resolve(rootDir, 'temp_rsz') ) 
+            event.sender.send('resize-session')
 
-            console.log({ found, tmpPath })
+            const sessionName = `${ moment().format('YYYYMMDDHHmmSS') }_${ width }x${ height }`
+            const dist = path.resolve(rootDir, sessionName)
 
-            if(
-                !payload.dist ||
-                (
-                    payload.dist && !found
-                )
-            ){
-                fs.existsSync(tmpPath) && fs.rmdirSync(tmpPath, { recursive: true })
-                !fs.existsSync(tmpPath) && fs.mkdirSync(tmpPath)
+            if( fs.existsSync(dist) ){
+                fs.rmdirSync(dist, { recursive: true })
             }
 
-            const dist = ( payload.dist && found ) ? payload.dist : tmpPath
+            fs.mkdirSync(dist)
+
+            event.sender.send('resize-process')
 
             const resized = await Promise.all(
                 files.map(file => new Promise(async (resolve, reject) =>{
                     try{
+                        const samplePx = await sharp(file.body)
+                        .extract({ left : 0, top : 0, width : 1, height : 1 })
+                        .raw()
+                        .toBuffer()
+
+                        const [ r, g, b ] = Array.from(samplePx)
+
+                        const background = { r, g, b, alpha : 1 }
+
                         const resized = await sharp(file.body)
                         .resize(
                             baseW,
                             baseH,
                             {
-                                fit: 'contain',
-                                background: {
-                                    r: 255, 
-                                    g: 255, 
-                                    b: 255, 
-                                    alpha: 1
-                                }
+                                fit: config.preserveAspectRatio ? 'contain' : 'fill',
+                                background
                             }
                         )
-                        .extend({
-                            top: padH, 
-                            bottom: padH, 
-                            left: padW, 
-                            right: padW, 
-                            background: { 
-                                r: 255, 
-                                g: 255, 
-                                b: 255, 
-                                alpha: 1
-                            } 
-                        })
+                        .extend(
+                            {
+                                top : padH,
+                                right : padW,
+                                bottom : padH,
+                                left : padW,
+                                background
+                            }
+                        )
                         .toBuffer()
 
                         resolve({
@@ -230,11 +289,10 @@ ipcMain.on('image-handler', async (event, payload) => {
                             header : { 
                                 width : width, 
                                 height : height, 
-                                type : file.header.type, 
-                                filename : [ 
-                                    dist ,
-                                    file.header.filename.split('/').reverse()[0] 
-                                ].join('/') 
+                                type : file.header.type,
+                                subPath : file.header.subPath,
+                                originName : file.header.originName,
+                                filename : path.resolve( dist,  ...file.header.subPath, file.header.originName ),
                             },
                             body : resized
                         })
@@ -245,12 +303,23 @@ ipcMain.on('image-handler', async (event, payload) => {
                 }))
             )
 
-            const writings = resized.map(file => fs.writeFileSync( file.header.filename, file.body ))
+            const writings = resized.map(file =>{
+                if( !fs.existsSync( path.resolve(dist, ...file.header.subPath) ) ){
+                    fs.mkdirSync( path.resolve(dist, ...file.header.subPath), { recursive: true } )
+                }
 
-            return event.sender.send('resize-complete', { count : writings.length })
+                fs.writeFileSync( file.header.filename, file.body )
+            })
+
+            event.sender.send('resize-complete', { count : writings.length })
+            return event.sender.send('init-file-tree', {
+                root : rootDir,
+                tree : searchDirectory(),
+            })
         }
         default:{
             return
         }
     }
 })
+
